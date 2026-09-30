@@ -1,6 +1,6 @@
 {
   "name": "adfree-music",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "description": "YouTube & YouTube Music tanpa iklan",
   "main": "src/main.js",
   "scripts": {

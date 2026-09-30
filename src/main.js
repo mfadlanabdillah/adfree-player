@@ -143,7 +143,7 @@ function setupIpc() {
   ipcMain.handle('net:json', async (_e, url) => {
     try {
       if (new URL(url).hostname !== 'lrclib.net') return null;
-      const res = await fetch(url, { headers: { 'User-Agent': 'AdFreeMusic/1.1 (personal player)' } });
+      const res = await fetch(url, { headers: { 'User-Agent': `AdFreeMusic/${app.getVersion()} (personal player)` } });
       return res.ok ? await res.json() : null;
     } catch {
       return null;

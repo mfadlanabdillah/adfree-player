@@ -3,3 +3,7 @@ build/
 local.properties
 .idea/
 *.iml
+
+# Kredensial signing release — JANGAN di-commit.
+keystore.properties
+keystore/

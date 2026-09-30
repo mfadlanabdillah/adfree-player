@@ -52,10 +52,29 @@ npm run dist       # build installer NSIS
 ```bash
 cd android
 ./gradlew assembleDebug    # APK debug siap pasang
-./gradlew assembleRelease  # APK release (ditandatangani debug key — untuk sideload)
+./gradlew assembleRelease  # APK release (keystore release bila tersedia, fallback debug key)
 ```
 
 Buka folder `android/` di Android Studio jika ingin build dari IDE. `minSdk 26`, `targetSdk 35`.
+
+## Versi & signing
+
+**Satu sumber versi**: nomor versi diatur hanya di [`package.json`](package.json).
+
+- Desktop Electron otomatis memakai `version` dari sana.
+- Android membaca file yang sama saat build Gradle: `versionName` = versi tersebut,
+  `versionCode` dihitung dari semver (`1.3.0` → `10300`), jadi selalu naik tiap rilis.
+- String `User-Agent` di kedua app (fetch lirik LRCLIB) ikut versi asli secara dinamis.
+
+Naikkan versi dengan mengedit `version` di `package.json`, lalu build ulang kedua platform.
+
+**Keystore release Android** ada di `android/keystore/release.keystore`, konfigurasinya di
+`android/keystore.properties` — keduanya **tidak di-commit** (lihat `android/.gitignore`).
+Tanpa file tersebut build tetap jalan dan APK release ditandatangani debug key (sideload).
+
+> Simpan backup keystore + password di tempat aman. Kehilangan keystore berarti tidak bisa
+> mengirim update ke pengguna yang sudah memasang APK lama (Android menolak update dengan
+> signature berbeda).
 
 ## Catatan
 

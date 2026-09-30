@@ -412,7 +412,8 @@ public class MainActivity extends Activity {
                         HttpURLConnection c = (HttpURLConnection) u.openConnection();
                         c.setConnectTimeout(10000);
                         c.setReadTimeout(10000);
-                        c.setRequestProperty("User-Agent", "AdFreeMusic/1.2 (personal player)");
+                        // Versi ikut package.json root (satu sumber dengan app desktop).
+                        c.setRequestProperty("User-Agent", "AdFreeMusic/" + BuildConfig.VERSION_NAME + " (personal player)");
                         if (c.getResponseCode() == 200) {
                             try (InputStream in = c.getInputStream()) {
                                 ByteArrayOutputStream out = new ByteArrayOutputStream();

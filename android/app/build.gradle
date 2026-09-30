@@ -2,6 +2,25 @@ plugins {
     id 'com.android.application'
 }
 
+import groovy.json.JsonSlurper
+
+// ---------------------------------------------------------------------------
+// Satu sumber nomor versi untuk desktop & Android: package.json di root repo.
+// versionCode dihitung dari semver (1.3.0 -> 10300) supaya selalu naik.
+// ---------------------------------------------------------------------------
+def packageJson = new JsonSlurper().parseText(file('../../package.json').text)
+def appVersion = packageJson.version
+def (vMajor, vMinor, vPatch) = appVersion.tokenize('.').collect { it.toInteger() }
+def appVersionCode = vMajor * 10000 + vMinor * 100 + vPatch
+
+// Signing release dibaca dari android/keystore.properties (tidak di-commit).
+// File tidak ada? Fallback ke debug key supaya build tetap jalan di mesin lain.
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace 'com.fadlan.adfreemusic'
     compileSdk 35
@@ -10,15 +29,33 @@ android {
         applicationId 'com.fadlan.adfreemusic'
         minSdk 26
         targetSdk 35
-        versionCode 4
-        versionName '1.3.0'
+        versionCode appVersionCode
+        versionName appVersion
+    }
+
+    signingConfigs {
+        if (keystorePropsFile.exists()) {
+            release {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
     }
 
     buildTypes {
         release {
-            minifyEnabled false
-            // Ditandatangani dengan debug key supaya APK langsung bisa dipasang (sideload).
-            signingConfig signingConfigs.debug
+            // R8 memperkecil & mengaburkan kode; resource tak terpakai ikut dibuang.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (keystorePropsFile.exists()) {
+                signingConfig signingConfigs.release
+            } else {
+                // Fallback: APK langsung bisa dipasang (sideload) tanpa keystore release.
+                signingConfig signingConfigs.debug
+            }
         }
     }
 
@@ -30,6 +67,11 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // BuildConfig.VERSION_NAME dipakai MainActivity untuk UA fetch lirik.
+    buildFeatures {
+        buildConfig true
     }
 }
 
