@@ -3,6 +3,42 @@
 const { ipcRenderer, contextBridge, webFrame } = require('electron');
 const { pruneAds, initAdFree } = require('../shared/adfree-core.js');
 
+// Versi Chromium Electron (dikirim main process via additionalArguments) untuk
+// menyamarkan navigator.userAgentData agar konsisten dengan UA palsu.
+const chromeArg = process.argv.find((a) => a.startsWith('--adfree-chrome='));
+const CHROME_VERSION = chromeArg ? chromeArg.split('=')[1] : '';
+
+// userAgentData hanya bisa diubah di main world (properti di prototype halaman).
+// Penting untuk login Google: alamat accounts.google.com juga di-preload.
+if (CHROME_VERSION) {
+  const patchUACH = `
+    (function () {
+      try {
+        if (!navigator.userAgentData) return;
+        const v = '${CHROME_VERSION}';
+        const brands = [{ brand: 'Google Chrome', version: v }, { brand: 'Chromium', version: v }, { brand: 'Not?A_Brand', version: '24' }];
+        Object.defineProperty(Navigator.prototype, 'userAgentData', {
+          configurable: true,
+          get: () => ({
+            brands,
+            mobile: false,
+            getHighEntropyValues: async (hints) => ({
+              architecture: 'x86', bitness: '64', model: '', platformVersion: '19.0.0',
+              uaFullVersion: v, fullVersionList: brands, platform: 'Windows',
+              wow64: false, formFactors: ['Desktop'],
+            }),
+          }),
+        });
+      } catch (e) {}
+    })();
+  `;
+  try {
+    contextBridge.executeInMainWorld({ func: new Function(patchUACH) });
+  } catch {
+    webFrame.executeJavaScript(patchUACH);
+  }
+}
+
 let adblockOn = ipcRenderer.sendSync('player:adblock-enabled');
 ipcRenderer.on('player:adblock', (_e, on) => (adblockOn = on));
 

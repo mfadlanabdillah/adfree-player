@@ -5,9 +5,14 @@ const { ElectronBlocker } = require('@ghostery/adblocker-electron');
 
 const MUSIC_URL = 'https://music.youtube.com/';
 const YOUTUBE_URL = 'https://www.youtube.com/';
-// UA Chrome biasa, supaya login Google tidak menolak "browser tidak aman".
+// UA Chrome yang SINKRON dengan Chromium asli Electron (process.versions.chrome).
+// Google membandingkan tiga sumber identitas saat login — string UA, header
+// Sec-CH-UA, dan navigator.userAgentData di JS. Kalau versinya tidak cocok
+// (mis. UA klaim Chrome 140 tapi Chromium asli 144), login ditolak
+// "This browser or app may not be secure".
+const CHROME_VERSION = process.versions.chrome;
 const CHROME_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+  `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
 
 const statePath = () => path.join(app.getPath('userData'), 'window-state.json');
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
@@ -185,6 +190,20 @@ async function createWindow() {
   const ses = session.fromPartition('persist:ytmusic');
   ses.setUserAgent(CHROME_UA);
 
+  // Samakan header client hints dengan UA palsu. Chromium asli mengirim brand
+  // "Chromium" (bukan "Google Chrome") dengan versinya sendiri — Google
+  // membandingkan ini dengan UA dan menolak yang tidak cocok.
+  const SEC_CH_UA = `"Chromium";v="${CHROME_VERSION}", "Google Chrome";v="${CHROME_VERSION}", "Not?A_Brand";v="24"`;
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
+    const headers = details.requestHeaders;
+    for (const h of Object.keys(headers)) if (h.toLowerCase().startsWith('sec-ch-ua')) delete headers[h];
+    headers['sec-ch-ua'] = SEC_CH_UA;
+    headers['sec-ch-ua-mobile'] = '?0';
+    headers['sec-ch-ua-platform'] = '"Windows"';
+    headers['User-Agent'] = CHROME_UA;
+    callback({ requestHeaders: headers });
+  });
+
   win = new BrowserWindow({
     ...bounds,
     minWidth: 480,
@@ -195,6 +214,9 @@ async function createWindow() {
     show: false,
     webPreferences: {
       session: ses,
+      // Versi Chromium diteruskan ke preload untuk patch navigator.userAgentData
+      // (preprocess tidak bisa membaca process.versions di sandbox).
+      additionalArguments: ['--adfree-chrome=' + CHROME_VERSION],
       // preload sudah di-bundle dengan esbuild (npm run build:preload) sehingga
       // shared/adfree-core.js ikut ter-inline dan sandbox bisa tetap aktif.
       preload: path.join(__dirname, 'preload.bundle.js'),
