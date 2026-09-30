@@ -29,6 +29,20 @@ async function readJson(file, fallback) {
 
 const writeJson = (file, data) => fs.writeFile(file, JSON.stringify(data, null, 2)).catch(() => {});
 
+// Tulis file dengan debounce: event resize/move bisa tembakan puluhan kali per detik.
+function debounce(fn, ms) {
+  let t;
+  const wrapped = (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+  wrapped.flush = () => {
+    clearTimeout(t);
+    fn();
+  };
+  return wrapped;
+}
+
 async function setupAdblock(ses) {
   const cachePath = path.join(app.getPath('userData'), 'adblock-engine.bin');
   blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
@@ -124,23 +138,7 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-function buildTray() {
-  const icon = nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 16, height: 16 });
-  tray = new Tray(icon);
-  const refresh = () =>
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: 'Tampilkan', click: () => { win.show(); win.focus(); } },
-        { type: 'separator' },
-        { label: nowPlaying.playing ? 'Jeda' : 'Putar', click: () => control('toggle') },
-        { label: 'Berikutnya', click: () => control('next') },
-        { label: 'Sebelumnya', click: () => control('prev') },
-        { type: 'separator' },
-        { label: 'Keluar', click: () => { app.isQuitting = true; app.quit(); } },
-      ])
-    );
-  refresh();
-  tray.on('click', () => (win.isVisible() ? win.hide() : win.show()));
+function setupIpc() {
   // Pengambil lirik untuk panel lirik real-time; hanya boleh ke lrclib.net.
   ipcMain.handle('net:json', async (_e, url) => {
     try {
@@ -156,8 +154,30 @@ function buildTray() {
     const changed = state.playing !== nowPlaying.playing;
     nowPlaying = state;
     updateTitle();
-    if (changed) refresh();
+    if (changed && tray) refreshTray();
   });
+}
+
+function refreshTray() {
+  if (!tray) return;
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Tampilkan', click: () => { win.show(); win.focus(); } },
+      { type: 'separator' },
+      { label: nowPlaying.playing ? 'Jeda' : 'Putar', click: () => control('toggle') },
+      { label: 'Berikutnya', click: () => control('next') },
+      { label: 'Sebelumnya', click: () => control('prev') },
+      { type: 'separator' },
+      { label: 'Keluar', click: () => { app.isQuitting = true; app.quit(); } },
+    ])
+  );
+}
+
+function buildTray() {
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 16, height: 16 });
+  tray = new Tray(icon);
+  refreshTray();
+  tray.on('click', () => (win.isVisible() ? win.hide() : win.show()));
 }
 
 async function createWindow() {
@@ -175,12 +195,12 @@ async function createWindow() {
     show: false,
     webPreferences: {
       session: ses,
-      preload: path.join(__dirname, 'preload.js'),
+      // preload sudah di-bundle dengan esbuild (npm run build:preload) sehingga
+      // shared/adfree-core.js ikut ter-inline dan sandbox bisa tetap aktif.
+      preload: path.join(__dirname, 'preload.bundle.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // sandbox dimatikan agar preload bisa memuat shared/adfree-core.js;
-      // contextIsolation tetap aktif, jadi halaman web tidak bisa menyentuh Node.
-      sandbox: false,
+      sandbox: true,
       backgroundThrottling: false, // musik tetap lancar saat jendela di belakang
     },
   });
@@ -203,10 +223,14 @@ async function createWindow() {
     }
   });
 
-  const saveBounds = () => writeJson(statePath(), { ...win.getNormalBounds(), maximized: win.isMaximized() });
+  const saveBounds = debounce(
+    () => writeJson(statePath(), { ...win.getNormalBounds(), maximized: win.isMaximized() }),
+    400
+  );
   win.on('resize', saveBounds);
   win.on('move', saveBounds);
   win.on('close', (e) => {
+    saveBounds.flush();
     if (settings.closeToTray && !app.isQuitting) {
       e.preventDefault();
       win.hide();
@@ -218,6 +242,7 @@ async function createWindow() {
   } catch (err) {
     console.error('Gagal memuat daftar filter iklan:', err);
   }
+  setupIpc();
   buildMenu();
   buildTray();
   updateTitle();

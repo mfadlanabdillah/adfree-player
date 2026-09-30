@@ -4,14 +4,18 @@
   "description": "YouTube & YouTube Music tanpa iklan",
   "main": "src/main.js",
   "scripts": {
+    "build:preload": "esbuild src/preload.js --bundle --platform=node --external:electron --outfile=src/preload.bundle.js",
+    "prestart": "npm run build:preload",
     "start": "electron .",
+    "predist": "npm run build:preload",
     "dist": "electron-builder --win"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "electron": "^44.4.5",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2"
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "^2.18.2"
