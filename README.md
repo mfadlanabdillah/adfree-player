@@ -57,6 +57,16 @@ cd android
 
 Buka folder `android/` di Android Studio jika ingin build dari IDE. `minSdk 26`, `targetSdk 35`.
 
+### Test
+
+```bash
+npm test   # unit test helper inti (parseLrc, cleanTitle, cleanArtist, findLyrics)
+```
+
+Test memakai `node:test` bawaan Node (tanpa dependency tambahan) dan berjalan tanpa
+jaringan — `fetchJson` di-mock. Helper murni diekspor dari `shared/adfree-core.js`
+lewat `_internal` khusus untuk keperluan testing.
+
 ## Versi & signing
 
 **Satu sumber versi**: nomor versi diatur hanya di [`package.json`](package.json).
