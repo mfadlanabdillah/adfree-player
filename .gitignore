@@ -8,6 +8,7 @@ src/preload.bundle.js
 
 # Tooling / workspace
 .freebuff/
+.arena/
 
 # OS junk
 .DS_Store

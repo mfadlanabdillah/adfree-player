@@ -25,7 +25,18 @@ Tersedia dua aplikasi dari satu logika inti yang sama:
 │   ├── main.js           # Main process: jendela, tray, menu, adblock, IPC
 │   └── preload.js        # Preload: jembatan halaman YouTube ↔ main process
 ├── shared/
-│   └── adfree-core.js    # Logika inti lintas platform (iklan, lirik, TV D-pad)
+│   ├── src/core/         # SUMBER logika inti (ES modules, edit di sini)
+│   │   ├── utils.js      #   helper DOM ($, h, ikon SVG)
+│   │   ├── track-utils.js#   helper murni: cleanTitle, parseLrc, findLyrics
+│   │   ├── ad-prune.js   #   pemangkas iklan (self-contained, main world)
+│   │   ├── ad-skip.js    #   peloncat iklan (mute + skip + dialog)
+│   │   ├── player.js     #   kontrol playback + pelaporan status
+│   │   ├── lyrics.js     #   panel lirik real-time (state + UI)
+│   │   ├── tv.js         #   navigasi D-pad Android TV
+│   │   ├── styles.js     #   CSS panel + selector HIDE iklan
+│   │   └── index.js      #   wiring initAdFree + loop utama + ekspor
+│   ├── build-core.js     # Bundel src/core → adfree-core.js (esbuild)
+│   └── adfree-core.js    # HASIL GENERATE — jangan edit langsung
 ├── android/              # Aplikasi Android (Java, WebView)
 │   └── app/src/main/java/com/fadlan/adfreemusic/
 │       ├── MainActivity.java   # WebView, intent, menu TV, remote handling
@@ -35,7 +46,11 @@ Tersedia dua aplikasi dari satu logika inti yang sama:
 └── dist/                 # Hasil build desktop (tidak di-commit)
 ```
 
-`shared/adfree-core.js` dipakai bersama: di desktop via `require()` di preload, di Android di-concat ke dalam asset `inject.js` saat runtime.
+`shared/src/core/` adalah sumber logika bersama (modul kecil per concern);
+`shared/adfree-core.js` dibundel dari sana via `npm run build:core` (jalan otomatis
+saat `npm start`, `npm test`, dan `npm run dist`). Hasil bundel dipakai bersama:
+di desktop via `require()` di preload, di Android di-concat ke dalam asset
+`inject.js` saat runtime, dan di unit test Node via `module.exports`.
 
 ## Menjalankan & build
 
