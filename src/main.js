@@ -34,6 +34,81 @@ async function readJson(file, fallback) {
 
 const writeJson = (file, data) => fs.writeFile(file, JSON.stringify(data, null, 2)).catch(() => {});
 
+// Samakan header client hints dengan UA di sesi mana pun. Chromium asli mengirim
+// brand "Chromium" (bukan "Google Chrome") dengan versinya sendiri — Google
+// membandingkan ini dengan UA dan menolak yang tidak cocok.
+function applyChromeHeaders(ses) {
+  const SEC_CH_UA = `"Chromium";v="${CHROME_VERSION}", "Google Chrome";v="${CHROME_VERSION}", "Not?A_Brand";v="24"`;
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
+    const headers = details.requestHeaders;
+    for (const h of Object.keys(headers)) if (h.toLowerCase().startsWith('sec-ch-ua')) delete headers[h];
+    headers['sec-ch-ua'] = SEC_CH_UA;
+    headers['sec-ch-ua-mobile'] = '?0';
+    headers['sec-ch-ua-platform'] = '"Windows"';
+    headers['User-Agent'] = CHROME_UA;
+    callback({ requestHeaders: headers });
+  });
+}
+
+// Login via jendela khusus: sesi segar TANPA preload & TANPA patch DOM.
+// Patch-patch identitas terbukti terdeteksi BotGuard Google pada langkah
+// setelah memasukkan email — jendela ini membiarkan DOM jujur; hanya
+// UA + header jaringan yang disinkronkan. Cookie YouTube yang berhasil
+// didapat otomatis disalin ke sesi utama, lalu jendela utama dimuat ulang.
+async function openLoginWindow() {
+  const authSes = session.fromPartition('adfree-auth-' + Date.now());
+  authSes.setUserAgent(CHROME_UA);
+  applyChromeHeaders(authSes);
+  const authWin = new BrowserWindow({
+    width: 500,
+    height: 780,
+    title: 'Login Google — AdFree Music',
+    backgroundColor: '#ffffff',
+    autoHideMenuBar: true,
+    webPreferences: { session: authSes, sandbox: true, contextIsolation: true },
+  });
+  let done = false;
+  const poll = setInterval(async () => {
+    if (done) return;
+    try {
+      const cookies = await authSes.cookies.get({});
+      const logged = cookies.some((c) => (c.name === '__Secure-1PSID' || c.name === 'SAPISID') && c.domain.endsWith('youtube.com'));
+      if (!logged) return;
+      done = true;
+      clearInterval(poll);
+      const mainSes = win ? win.webContents.session : null;
+      if (mainSes) {
+        for (const c of cookies) {
+          if (!(c.domain.includes('youtube.com') || c.domain.includes('google.com'))) continue;
+          await mainSes.cookies.set({
+            url: `https://${c.domain.replace(/^\./, '')}${c.path}`,
+            name: c.name,
+            value: c.value,
+            domain: c.domain,
+            path: c.path,
+            secure: c.secure,
+            httpOnly: c.httpOnly,
+            expirationDate: c.expirationDate,
+            sameSite: c.sameSite === 'unspecified' ? undefined : c.sameSite,
+          }).catch(() => {});
+        }
+      }
+      authWin.close();
+      if (win) {
+        win.loadURL(settings.lastSite === YOUTUBE_URL ? YOUTUBE_URL : MUSIC_URL);
+        win.show();
+        win.focus();
+      }
+    } catch (e) {}
+  }, 1500);
+  authWin.on('closed', () => clearInterval(poll));
+  await authWin.loadURL(
+    'https://accounts.google.com/v3/signin/identifier?continue=' +
+      encodeURIComponent('https://music.youtube.com/') +
+      '&hl=id&flowEntry=ServiceLogin'
+  );
+}
+
 // Tulis file dengan debounce: event resize/move bisa tembakan puluhan kali per detik.
 function debounce(fn, ms) {
   let t;
@@ -109,6 +184,24 @@ function buildMenu() {
       ],
     },
     {
+      label: 'Akun',
+      submenu: [
+        {
+          label: 'Login akun Google (jendela khusus)',
+          click: () => openLoginWindow(),
+        },
+        {
+          label: 'Bersihkan data login & cache',
+          click: async () => {
+            const ses = win.webContents.session;
+            await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cachestorage'] });
+            await ses.clearCache();
+            win.loadURL(settings.lastSite === YOUTUBE_URL ? YOUTUBE_URL : MUSIC_URL);
+          },
+        },
+      ],
+    },
+    {
       label: 'Perlindungan',
       submenu: [
         {
@@ -124,18 +217,6 @@ function buildMenu() {
           click: (item) => {
             settings.closeToTray = item.checked;
             writeJson(settingsPath(), settings);
-          },
-        },
-        { type: 'separator' },
-        {
-          label: 'Bersihkan data login & cache',
-          click: async () => {
-            // Google kadang menempel penanda "klien tidak aman" di cookie setelah
-            // beberapa penolakan login; bersihkan sesi + cache lalu muat ulang.
-            const ses = win.webContents.session;
-            await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cachestorage'] });
-            await ses.clearCache();
-            win.loadURL(settings.lastSite === YOUTUBE_URL ? YOUTUBE_URL : MUSIC_URL);
           },
         },
       ],
@@ -204,20 +285,7 @@ async function createWindow() {
   // Fallback untuk request yang tidak lewat webContents (service worker,
   // redirect internal): tanpa ini identitas Electron bisa bocor di sini.
   app.userAgentFallback = CHROME_UA;
-
-  // Samakan header client hints dengan UA palsu. Chromium asli mengirim brand
-  // "Chromium" (bukan "Google Chrome") dengan versinya sendiri — Google
-  // membandingkan ini dengan UA dan menolak yang tidak cocok.
-  const SEC_CH_UA = `"Chromium";v="${CHROME_VERSION}", "Google Chrome";v="${CHROME_VERSION}", "Not?A_Brand";v="24"`;
-  ses.webRequest.onBeforeSendHeaders((details, callback) => {
-    const headers = details.requestHeaders;
-    for (const h of Object.keys(headers)) if (h.toLowerCase().startsWith('sec-ch-ua')) delete headers[h];
-    headers['sec-ch-ua'] = SEC_CH_UA;
-    headers['sec-ch-ua-mobile'] = '?0';
-    headers['sec-ch-ua-platform'] = '"Windows"';
-    headers['User-Agent'] = CHROME_UA;
-    callback({ requestHeaders: headers });
-  });
+  applyChromeHeaders(ses);
 
   win = new BrowserWindow({
     ...bounds,
