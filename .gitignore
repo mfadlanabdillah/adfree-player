@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+*.apk
+src/preload.bundle.js
+
+# Tooling / workspace
+.freebuff/
+
+# OS junk
+.DS_Store
+Thumbs.db

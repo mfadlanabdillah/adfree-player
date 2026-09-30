@@ -1,0 +1,37 @@
+{
+  "name": "adfree-music",
+  "version": "1.1.0",
+  "description": "YouTube & YouTube Music tanpa iklan",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "^2.18.2"
+  },
+  "productName": "AdFree Music",
+  "build": {
+    "appId": "com.fadlan.adfreemusic",
+    "productName": "AdFree Music",
+    "files": [
+      "src/**/*",
+      "shared/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "src/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

@@ -1,0 +1,40 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.fadlan.adfreemusic'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.fadlan.adfreemusic'
+        minSdk 26
+        targetSdk 35
+        versionCode 4
+        versionName '1.3.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Ditandatangani dengan debug key supaya APK langsung bisa dipasang (sideload).
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    // Pakai juga shared/adfree-core.js (logika yang sama dengan aplikasi desktop).
+    sourceSets {
+        main.assets.srcDirs += '../../shared'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.media:media:1.7.0'
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
