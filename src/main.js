@@ -126,6 +126,18 @@ function buildMenu() {
             writeJson(settingsPath(), settings);
           },
         },
+        { type: 'separator' },
+        {
+          label: 'Bersihkan data login & cache',
+          click: async () => {
+            // Google kadang menempel penanda "klien tidak aman" di cookie setelah
+            // beberapa penolakan login; bersihkan sesi + cache lalu muat ulang.
+            const ses = win.webContents.session;
+            await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cachestorage'] });
+            await ses.clearCache();
+            win.loadURL(settings.lastSite === YOUTUBE_URL ? YOUTUBE_URL : MUSIC_URL);
+          },
+        },
       ],
     },
     {
@@ -189,6 +201,9 @@ async function createWindow() {
   const bounds = await readJson(statePath(), { width: 1280, height: 820 });
   const ses = session.fromPartition('persist:ytmusic');
   ses.setUserAgent(CHROME_UA);
+  // Fallback untuk request yang tidak lewat webContents (service worker,
+  // redirect internal): tanpa ini identitas Electron bisa bocor di sini.
+  app.userAgentFallback = CHROME_UA;
 
   // Samakan header client hints dengan UA palsu. Chromium asli mengirim brand
   // "Chromium" (bukan "Google Chrome") dengan versinya sendiri — Google
